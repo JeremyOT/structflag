@@ -40,7 +40,8 @@ var durationType = reflect.TypeOf(time.Duration(0))
 // A flag:"name" tag may be applied to the struct fields to set a custom field name. If no
 // matching tag is found, structflag will try to use a "json" tag. Otherwise the field name
 // is used as is. Finally, all underscores in the field name are replaced with '-'.
-func StructToArgs(prefix string, v interface{}) (args []string) {
+func StructToArgs(prefix string, v interface{}, ignoredFields ...string) (args []string) {
+	ignored := newStringSet(ignoredFields...)
 	if prefix != "" {
 		prefix = prefix + "-"
 	}
@@ -68,6 +69,9 @@ func StructToArgs(prefix string, v interface{}) (args []string) {
 			}
 		}
 		flagName = strings.Replace(flagName, "_", "-", -1)
+		if flagName == "-" || ignored.Contains(flagName) {
+			continue
+		}
 		fieldValue := value.Field(i)
 		switch fieldValue.Kind() {
 		case reflect.Bool:
@@ -121,7 +125,8 @@ func StructToArgs(prefix string, v interface{}) (args []string) {
 //
 // Supported field types: bool, int, int64, uint,uint64, float64, time.Duration, string
 // Calling StructToFlags with a struct containing unsupported fields will panic.
-func StructToFlags(prefix string, v interface{}) {
+func StructToFlags(prefix string, v interface{}, ignoredFields ...string) {
+	ignored := newStringSet(ignoredFields...)
 	if prefix != "" {
 		prefix = prefix + "-"
 	}
@@ -149,6 +154,9 @@ func StructToFlags(prefix string, v interface{}) {
 			}
 		}
 		flagName = strings.Replace(flagName, "_", "-", -1)
+		if flagName == "-" || ignored.Contains(flagName) {
+			continue
+		}
 		fieldValue := value.Field(i)
 		switch fieldValue.Kind() {
 		case reflect.Bool:
@@ -181,5 +189,30 @@ func StructToFlags(prefix string, v interface{}) {
 		}
 	}
 	return
+}
 
+type stringSet map[string]struct{}
+
+func newStringSet(s ...string) stringSet {
+	set := stringSet{}
+	for _, i := range s {
+		set[i] = struct{}{}
+	}
+	return set
+}
+
+func (s stringSet) Contains(v string) bool {
+	_, ok := s[v]
+	return ok
+}
+
+func (s stringSet) SubSet(prefix string) stringSet {
+	subSet := stringSet{}
+	for v := range s {
+		split := strings.SplitN(v, ".", 1)
+		if split[0] == prefix {
+			subSet[split[1]] = struct{}{}
+		}
+	}
+	return subSet
 }
